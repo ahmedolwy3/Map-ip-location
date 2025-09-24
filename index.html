@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Address Location Finder</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <h1>IP Location Mapper</h1>
+        
+        <div class="input-group">
+            <input type="text" id="ip-input" placeholder="Enter IP address (e.g., 8.8.8.8)">
+            <button id="search-btn">Search</button>
+            <button id="my-ip-btn">Find My IP</button>
+        </div>
+
+        <p id="error-message" class="error-message"></p>
+
+        <div id="map-container">
+            <div id="loader" class="loader"></div>
+            <div id="map"></div>
+        </div>
+
+        <div id="location-details">
+            <p><strong>IP Address:</strong> <span id="ip-display">-</span></p>
+            <p><strong>Location:</strong> <span id="location-display">-</span></p>
+            <p><strong>ISP:</strong> <span id="isp-display">-</span></p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>
