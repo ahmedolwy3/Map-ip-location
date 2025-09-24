@@ -1,126 +1,18 @@
-/* General Body Styles */
+/* Basic layout + map height */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #f4f7f6;
-    margin: 0;
-    padding: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-}
-
-/* Main Container */
-.container {
-    background: #ffffff;
-    padding: 25px 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px D15px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 800px;
-    text-align: center;
-}
-
-h1 {
-    color: #333;
-    margin-top: 0;
-}
-
-/* Input and Buttons */
-.input-group {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-}
-
-#ip-input {
-    flex-grow: 1;
-    min-width: 200px;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    font-size: 16px;
-}
-
-button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    background-color: #007bff;
-    color: white;
-    font-size: 16px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-
-button:hover {
-    background-color: #0056b3;
-}
-
-#my-ip-btn {
-    background-color: #28a745;
-}
-
-#my-ip-btn:hover {
-    background-color: #218838;
-}
-
-/* NEW: Error message style */
-.error-message {
-    color: #dc3545; /* Red color for errors */
-    min-height: 20px;
-    margin: 0 0 10px 0;
-}
-
-/* UPDATED: Map Container to position loader */
-#map-container {
-    position: relative;
-    margin-bottom: 20px;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
 }
 
 #map {
-    height: 400px;
-    width: 100%;
-    border-radius: 5px;
-    border: 1px solid #ccc;
-    background-color: #e9ecef; /* Placeholder color */
+  height: 520px;
+  min-height: 360px;
+  border-radius: 0;
 }
 
-/* NEW: Loader styles */
-.loader {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    border: 5px solid #f3f3f3; /* Light grey */
-    border-top: 5px solid #3498db; /* Blue */
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
-    z-index: 1000; /* Ensure it's above the map */
-    display: none; /* Hidden by default */
+/* Smaller screens map height */
+@media (max-width: 767px) {
+  #map { height: 360px; }
 }
 
-@keyframes spin {
-    0% { transform: translate(-50%, -50%) rotate(0deg); }
-    100% { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-/* Location Details Section */
-#location-details {
-    text-align: left;
-    background-color: #e9ecef;
-    padding: 15px;
-    border-radius: 5px;
-}
-
-#location-details p {
-    margin: 8px 0;
-    color: #495057;
-}
-
-#location-details strong {
-    color: #343a40;
-}
+/* Fine-tune cards */
+.card-title { font-weight: 700; }

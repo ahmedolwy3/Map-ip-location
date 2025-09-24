@@ -1,112 +1,156 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // DOM refs
+  const ipInput = document.getElementById('ip-input');
+  const searchBtn = document.getElementById('search-btn');
+  const myIpBtn = document.getElementById('my-ip-btn');
+  const deviceLocBtn = document.getElementById('device-loc-btn');
+  const errorMessage = document.getElementById('error-message');
+  const loader = document.getElementById('loader');
 
-    // --- DOM Element References ---
-    const ipInputElement = document.getElementById('ip-input');
-    const searchButton = document.getElementById('search-btn');
-    const myIpButton = document.getElementById('my-ip-btn');
-    const mapElement = document.getElementById('map');
-    const loader = document.getElementById('loader');
-    const errorMessage = document.getElementById('error-message');
-    
-    const ipDisplay = document.getElementById('ip-display');
-    const locationDisplay = document.getElementById('location-display');
-    const ispDisplay = document.getElementById('isp-display');
+  const ipDisplay = document.getElementById('ip-display');
+  const locationDisplay = document.getElementById('location-display');
+  const ispDisplay = document.getElementById('isp-display');
+  const tzDisplay = document.getElementById('tz-display');
 
-    // --- Map Initialization ---
-    const map = L.map(mapElement).setView([20, 0], 2);
-    let marker = null;
+  // Initialize map (use the string id 'map')
+  const map = L.map('map').setView([20, 0], 2);
+  let marker = null;
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
 
-    // --- Core Functions ---
+  // Helper: show/hide loader
+  function setLoading(on) {
+    loader.style.display = on ? 'inline-block' : 'none';
+  }
 
-    /**
-     * Fetches geolocation data and updates the UI using the new ipwho.is API.
-     * @param {string} ipAddress - The IP to look up. If empty, the API uses the user's IP.
-     */
-    const getIpLocation = async (ipAddress = '') => {
-        loader.style.display = 'block';
-        errorMessage.textContent = '';
-        updateDetails({ status: 'loading' });
+  // Helper: safe text
+  function safeText(v) { return (v === undefined || v === null || v === '') ? '-' : String(v); }
 
-        try {
-            // --- CHANGE #1: Using the new ipwho.is API endpoint with HTTPS ---
-            const response = await fetch(`https://ipwho.is/${ipAddress}`);
-            const data = await response.json();
+  // Update marker & map
+  function updateMap(lat, lon, label = '') {
+    if (!isFinite(lat) || !isFinite(lon)) {
+      errorMessage.textContent = 'Coordinates not available.';
+      return;
+    }
+    map.setView([lat, lon], 13);
+    if (marker) marker.remove();
+    marker = L.marker([lat, lon]).addTo(map);
+    if (label) marker.bindPopup(label).openPopup();
+  }
 
-            // 2. Handle the API response
-            if (data.success) {
-                // --- CHANGE #2: Using the new data properties from ipwho.is (latitude, longitude, etc.) ---
-                updateMap(data.latitude, data.longitude);
-                updateDetails(data);
-            } else {
-                errorMessage.textContent = data.message || 'Could not find location for the specified IP.';
-                updateDetails({ status: 'fail' });
-            }
-        } catch (error) {
-            console.error('Error fetching IP data:', error);
-            errorMessage.textContent = 'An error occurred. Please check your connection.';
-        } finally {
-            loader.style.display = 'none';
-        }
-    };
+  // Fill details from ipwho.is response
+  function fillDetailsFromIP(data) {
+    ipDisplay.textContent = safeText(data.ip);
+    const parts = [data.city, data.region, data.country].filter(Boolean);
+    locationDisplay.textContent = parts.length ? parts.join(', ') : `${safeText(data.latitude)}, ${safeText(data.longitude)}`;
+    // ipwho.is may return ISP info in different fields
+    const isp = data.connection?.isp || data.connection?.org || data.org || data.isp;
+    ispDisplay.textContent = safeText(isp);
+    tzDisplay.textContent = (data.timezone && (data.timezone.id || data.timezone)) ? (data.timezone.id || data.timezone) : '-';
+  }
 
-    /**
-     * Updates the map view and marker.
-     * @param {number} lat - Latitude
-     * @param {number} lon - Longitude
-     */
-    const updateMap = (lat, lon) => {
-        map.setView([lat, lon], 13);
-        if (marker) {
-            map.removeLayer(marker);
-        }
-        marker = L.marker([lat, lon]).addTo(map).bindPopup(`Location for ${ipDisplay.textContent}`).openPopup();
-    };
+  // Fill details from browser geolocation
+  function fillDetailsFromDevice(lat, lon) {
+    ipDisplay.textContent = 'Device (browser)';
+    locationDisplay.textContent = `Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`;
+    ispDisplay.textContent = 'Browser Geolocation';
+    tzDisplay.textContent = '-';
+  }
 
-    /**
-     * Updates the details section with data from ipwho.is.
-     * @param {object} data - The data from the API.
-     */
-    const updateDetails = (data) => {
-        if (data.status === 'loading') {
-            ipDisplay.textContent = 'Loading...';
-            locationDisplay.textContent = 'Loading...';
-            ispDisplay.textContent = 'Loading...';
-        } else if (data.success) { // --- CHANGE #3: The success flag is now 'data.success' ---
-            ipDisplay.textContent = data.ip || '-';
-            locationDisplay.textContent = `${data.city || ''}, ${data.region || ''}, ${data.country || ''}`;
-            ispDisplay.textContent = data.isp || '-';
-        } else { // Handle 'fail' or other states
-            ipDisplay.textContent = '-';
-            locationDisplay.textContent = '-';
-            ispDisplay.textContent = '-';
-        }
-    };
+  // Fetch location by IP (uses ipwho.is)
+  async function getIpLocation(ipAddress = '') {
+    setLoading(true);
+    errorMessage.textContent = '';
+    try {
+      // ipwho.is supports empty path to lookup caller IP
+      const url = ipAddress ? `https://ipwho.is/${encodeURIComponent(ipAddress)}` : 'https://ipwho.is/';
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Network error: ${res.status}`);
+      const data = await res.json();
 
-    // --- Event Listeners (No changes needed here) ---
-    searchButton.addEventListener('click', () => {
-        const ip = ipInputElement.value.trim();
-        if (ip) {
-            getIpLocation(ip);
-        } else {
-            errorMessage.textContent = 'Please enter an IP address.';
-        }
-    });
-    
-    ipInputElement.addEventListener('keypress', (event) => {
-        if (event.key === 'Enter') {
-            searchButton.click();
-        }
-    });
+      if (!data.success) {
+        // ipwho.is returns success=false for invalid IP
+        errorMessage.textContent = data.message || 'Lookup failed for that IP.';
+        // clear details
+        ipDisplay.textContent = '-';
+        locationDisplay.textContent = '-';
+        ispDisplay.textContent = '-';
+        tzDisplay.textContent = '-';
+        setLoading(false);
+        return;
+      }
 
-    myIpButton.addEventListener('click', () => {
-        ipInputElement.value = '';
-        getIpLocation();
-    });
+      fillDetailsFromIP(data);
 
-    // --- Initial Load ---
-    getIpLocation();
+      const lat = Number(data.latitude);
+      const lon = Number(data.longitude);
+      if (isFinite(lat) && isFinite(lon)) {
+        updateMap(lat, lon, `IP: ${data.ip}`);
+      } else {
+        errorMessage.textContent = 'Coordinates not returned by IP service.';
+      }
+    } catch (err) {
+      console.error(err);
+      errorMessage.textContent = 'Error fetching IP data. Check your connection.';
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Use browser Geolocation API (more accurate)
+  function getBrowserLocation() {
+    errorMessage.textContent = '';
+    if (!navigator.geolocation) {
+      errorMessage.textContent = 'Browser geolocation not supported.';
+      return;
+    }
+
+    setLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        fillDetailsFromDevice(lat, lon);
+        updateMap(lat, lon, 'Your device location (browser geolocation)');
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Geolocation error:', err);
+        if (err.code === 1) errorMessage.textContent = 'Permission denied for geolocation.';
+        else if (err.code === 3) errorMessage.textContent = 'Geolocation timed out.';
+        else errorMessage.textContent = 'Could not get device location.';
+        setLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }
+
+  // Event listeners
+  searchBtn.addEventListener('click', () => {
+    errorMessage.textContent = '';
+    const ip = ipInput.value.trim();
+    if (!ip) {
+      errorMessage.textContent = 'Please enter an IP address or use "My IP".';
+      return;
+    }
+    getIpLocation(ip);
+  });
+
+  ipInput.addEventListener('keypress', (ev) => {
+    if (ev.key === 'Enter') searchBtn.click();
+  });
+
+  myIpBtn.addEventListener('click', () => {
+    ipInput.value = '';
+    getIpLocation(); // lookup via caller IP
+  });
+
+  deviceLocBtn.addEventListener('click', () => {
+    getBrowserLocation();
+  });
+
+  // Initial: lookup caller IP once
+  getIpLocation();
 });
