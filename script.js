@@ -1,156 +1,166 @@
-document.addEventListener('DOMContentLoaded', () => {
-  // DOM refs
-  const ipInput = document.getElementById('ip-input');
-  const searchBtn = document.getElementById('search-btn');
-  const myIpBtn = document.getElementById('my-ip-btn');
-  const deviceLocBtn = document.getElementById('device-loc-btn');
-  const errorMessage = document.getElementById('error-message');
-  const loader = document.getElementById('loader');
+document.addEventListener("DOMContentLoaded", () => {
+  const ipInput = document.getElementById("ip-input");
+  const searchBtn = document.getElementById("search-btn");
+  const myIpBtn = document.getElementById("my-ip-btn");
+  const accurateBtn = document.getElementById("accurate-btn");
 
-  const ipDisplay = document.getElementById('ip-display');
-  const locationDisplay = document.getElementById('location-display');
-  const ispDisplay = document.getElementById('isp-display');
-  const tzDisplay = document.getElementById('tz-display');
+  const loader = document.getElementById("loader");
+  const errorMsg = document.getElementById("error-message");
 
-  // Initialize map (use the string id 'map')
-  const map = L.map('map').setView([20, 0], 2);
+  const ipDisplay = document.getElementById("ip-display");
+  const locationDisplay = document.getElementById("location-display");
+  const timezoneDisplay = document.getElementById("timezone-display");
+  const ispDisplay = document.getElementById("isp-display");
+
+  const map = L.map("map").setView([20, 0], 2);
   let marker = null;
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
   }).addTo(map);
 
-  // Helper: show/hide loader
-  function setLoading(on) {
-    loader.style.display = on ? 'inline-block' : 'none';
-  }
+  const API_KEY = "at_wuvOQ7NKYsA7ReFthDnzqtIvnKo9C";
 
-  // Helper: safe text
-  function safeText(v) { return (v === undefined || v === null || v === '') ? '-' : String(v); }
-
-  // Update marker & map
-  function updateMap(lat, lon, label = '') {
-    if (!isFinite(lat) || !isFinite(lon)) {
-      errorMessage.textContent = 'Coordinates not available.';
-      return;
+  // --- Time handling ---
+  let timeUpdateTimer = null;
+  function clearTimeTimer() {
+    if (timeUpdateTimer) {
+      clearInterval(timeUpdateTimer);
+      timeUpdateTimer = null;
     }
-    map.setView([lat, lon], 13);
-    if (marker) marker.remove();
-    marker = L.marker([lat, lon]).addTo(map);
-    if (label) marker.bindPopup(label).openPopup();
   }
-
-  // Fill details from ipwho.is response
-  function fillDetailsFromIP(data) {
-    ipDisplay.textContent = safeText(data.ip);
-    const parts = [data.city, data.region, data.country].filter(Boolean);
-    locationDisplay.textContent = parts.length ? parts.join(', ') : `${safeText(data.latitude)}, ${safeText(data.longitude)}`;
-    // ipwho.is may return ISP info in different fields
-    const isp = data.connection?.isp || data.connection?.org || data.org || data.isp;
-    ispDisplay.textContent = safeText(isp);
-    tzDisplay.textContent = (data.timezone && (data.timezone.id || data.timezone)) ? (data.timezone.id || data.timezone) : '-';
+  function formatTimeFromOffset(offset) {
+    // offset example: "+02:00" or "-07:00"
+    if (typeof offset !== 'string' || !offset.includes(':')) return '';
+    const sign = offset.startsWith('-') ? -1 : 1;
+    const [hh, mm] = offset.replace('+','').replace('-','').split(':').map(n => parseInt(n, 10) || 0);
+    const totalMinutes = sign * (hh * 60 + mm);
+    const now = new Date();
+    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+    const localMs = utcMs + totalMinutes * 60000;
+    const localDate = new Date(localMs);
+    return localDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
-
-  // Fill details from browser geolocation
-  function fillDetailsFromDevice(lat, lon) {
-    ipDisplay.textContent = 'Device (browser)';
-    locationDisplay.textContent = `Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`;
-    ispDisplay.textContent = 'Browser Geolocation';
-    tzDisplay.textContent = '-';
-  }
-
-  // Fetch location by IP (uses ipwho.is)
-  async function getIpLocation(ipAddress = '') {
-    setLoading(true);
-    errorMessage.textContent = '';
-    try {
-      // ipwho.is supports empty path to lookup caller IP
-      const url = ipAddress ? `https://ipwho.is/${encodeURIComponent(ipAddress)}` : 'https://ipwho.is/';
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`Network error: ${res.status}`);
-      const data = await res.json();
-
-      if (!data.success) {
-        // ipwho.is returns success=false for invalid IP
-        errorMessage.textContent = data.message || 'Lookup failed for that IP.';
-        // clear details
-        ipDisplay.textContent = '-';
-        locationDisplay.textContent = '-';
-        ispDisplay.textContent = '-';
-        tzDisplay.textContent = '-';
-        setLoading(false);
-        return;
+  function setTimezoneWithTime({ tzLabel, offset, iana }) {
+    clearTimeTimer();
+    const update = () => {
+      let timeStr = '';
+      if (iana) {
+        timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: iana });
+      } else if (offset) {
+        timeStr = formatTimeFromOffset(offset);
       }
+      timezoneDisplay.textContent = tzLabel ? `${tzLabel} ${timeStr ? '(' + timeStr + ')' : ''}` : (timeStr || '-');
+    };
+    update();
+    timeUpdateTimer = setInterval(update, 60 * 1000);
+  }
 
-      fillDetailsFromIP(data);
+  // --- API Request Function ---
+  async function getIpLocation(ip = "") {
+    loader.style.display = "block";
+    errorMsg.textContent = "";
 
-      const lat = Number(data.latitude);
-      const lon = Number(data.longitude);
-      if (isFinite(lat) && isFinite(lon)) {
-        updateMap(lat, lon, `IP: ${data.ip}`);
+    try {
+      const url = ip
+        ? `https://geo.ipify.org/api/v1?apiKey=${API_KEY}&ipAddress=${ip}`
+        : `https://geo.ipify.org/api/v1?apiKey=${API_KEY}`;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.location) {
+        updateMap(data.location.lat, data.location.lng, data.ip);
+        ipDisplay.textContent = data.ip || "-";
+        locationDisplay.textContent = `${data.location.city || ""}, ${data.location.region || ""}, ${data.location.country || ""}`;
+        const tz = data.location.timezone || ""; // e.g. -07:00
+        setTimezoneWithTime({ tzLabel: tz, offset: tz });
+        ispDisplay.textContent = data.isp || "-";
       } else {
-        errorMessage.textContent = 'Coordinates not returned by IP service.';
+        errorMsg.textContent = "Could not fetch location.";
       }
     } catch (err) {
+      errorMsg.textContent = "Error fetching data.";
       console.error(err);
-      errorMessage.textContent = 'Error fetching IP data. Check your connection.';
     } finally {
-      setLoading(false);
+      loader.style.display = "none";
     }
   }
 
-  // Use browser Geolocation API (more accurate)
-  function getBrowserLocation() {
-    errorMessage.textContent = '';
-    if (!navigator.geolocation) {
-      errorMessage.textContent = 'Browser geolocation not supported.';
-      return;
-    }
-
-    setLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        fillDetailsFromDevice(lat, lon);
-        updateMap(lat, lon, 'Your device location (browser geolocation)');
-        setLoading(false);
-      },
-      (err) => {
-        console.error('Geolocation error:', err);
-        if (err.code === 1) errorMessage.textContent = 'Permission denied for geolocation.';
-        else if (err.code === 3) errorMessage.textContent = 'Geolocation timed out.';
-        else errorMessage.textContent = 'Could not get device location.';
-        setLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+  // --- Map Update ---
+  function updateMap(lat, lng, label = "Location") {
+    map.setView([lat, lng], 13);
+    if (marker) map.removeLayer(marker);
+    marker = L.marker([lat, lng], { riseOnHover: true }).addTo(map).bindPopup(label).openPopup();
+    // Apply drop animation class to marker icon when available
+    setTimeout(() => {
+      if (marker && marker._icon) {
+        marker._icon.classList.add('marker-drop');
+      }
+    }, 0);
   }
 
-  // Event listeners
-  searchBtn.addEventListener('click', () => {
-    errorMessage.textContent = '';
+  // --- High Accuracy using Browser GPS ---
+  function getAccurateLocation() {
+    if (navigator.geolocation) {
+      loader.style.display = "block";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          updateMap(lat, lng, "Your Device (GPS)");
+          ipDisplay.textContent = "Device GPS";
+          locationDisplay.textContent = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+          const iana = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          setTimezoneWithTime({ tzLabel: iana, iana });
+          ispDisplay.textContent = "-";
+          loader.style.display = "none";
+        },
+        (err) => {
+          errorMsg.textContent = "Permission denied or unavailable.";
+          loader.style.display = "none";
+        },
+        { enableHighAccuracy: true }
+      );
+    } else {
+      errorMsg.textContent = "Geolocation not supported by your browser.";
+    }
+  }
+
+  // --- Event Listeners ---
+  // Button ripple helper
+  function attachRipple(el) {
+    if (!el) return;
+    el.addEventListener('click', (e) => {
+      const rect = el.getBoundingClientRect();
+      const ripple = document.createElement('span');
+      const size = Math.max(rect.width, rect.height);
+      ripple.style.width = ripple.style.height = size + 'px';
+      ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+      ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+      ripple.className = 'ripple-effect';
+      el.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 600);
+    });
+  }
+
+  [searchBtn, myIpBtn, accurateBtn].forEach(attachRipple);
+
+  searchBtn.addEventListener("click", () => {
     const ip = ipInput.value.trim();
-    if (!ip) {
-      errorMessage.textContent = 'Please enter an IP address or use "My IP".';
-      return;
+    if (ip) {
+      getIpLocation(ip);
+    } else {
+      errorMsg.textContent = "Please enter an IP address.";
     }
-    getIpLocation(ip);
   });
 
-  ipInput.addEventListener('keypress', (ev) => {
-    if (ev.key === 'Enter') searchBtn.click();
+  ipInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") searchBtn.click();
   });
 
-  myIpBtn.addEventListener('click', () => {
-    ipInput.value = '';
-    getIpLocation(); // lookup via caller IP
-  });
+  myIpBtn.addEventListener("click", () => getIpLocation());
+  accurateBtn.addEventListener("click", getAccurateLocation);
 
-  deviceLocBtn.addEventListener('click', () => {
-    getBrowserLocation();
-  });
-
-  // Initial: lookup caller IP once
+  // --- Initial load ---
   getIpLocation();
 });
