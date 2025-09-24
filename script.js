@@ -159,7 +159,16 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   myIpBtn.addEventListener("click", () => getIpLocation());
-  accurateBtn.addEventListener("click", getAccurateLocation);
+  accurateBtn.addEventListener("click", () => {
+    const ip = ipInput.value.trim();
+    if (ip) {
+      // If an IP is entered, treat High Accuracy as IP-targeted lookup
+      getIpLocation(ip);
+    } else {
+      // No IP entered → use device geolocation for higher accuracy
+      getAccurateLocation();
+    }
+  });
 
   // --- Initial load ---
   getIpLocation();
